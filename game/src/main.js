@@ -20,6 +20,8 @@ import { newInput, attachInput, readControls, pressed } from './input.js';
 import { newAudio, startAudio, setMuted, updateAudio, sfx } from './audio.js';
 import { drawHUD, drawTitle, drawPause, drawGameOver, drawWin } from './hud.js';
 import { createRenderer, renderScene, chaseCamera, cameraMatrixForShot } from './render.js';
+import { buildCockpitMesh, cockpitCamera, flightPhase, landingBonus } from './cockpit.js';
+import { addMessage } from './missions.js';
 import { parseShot, stageShot } from './shots.js';
 
 const glCanvas = document.getElementById('gl');
@@ -74,6 +76,10 @@ const state = {
   mission: staged ? staged.mission : newMission(),
   planeMesh: buildPlaneMesh(gl),
   propMesh: buildPropMesh(gl),
+  cockpitMesh: buildCockpitMesh(gl),
+  cockpit: staged ? !!staged.cockpit : true, // the cockpit is the default view
+  autoPitch: staged ? !!staged.autoPitch : false, // staged takeoff rotates on its own
+  phase: null,
   drops: [], // water blobs in flight {x,y,z,vy,age}
   splashes: [], // expanding rings where water landed {x,y,z,age}
   dropping: staged ? !!staged.dropping : false,
@@ -95,6 +101,7 @@ function resetGame() {
   state.dropping = false;
   state.screen = 'fly';
   state.fireOutCount = 0;
+  state.phase = null;
   state.cam = {
     x: state.plane.x,
     y: 40,
@@ -114,6 +121,8 @@ function step(dt) {
   const p = state.plane;
   const m = state.mission;
   const controls = readControls(input, hudCanvas.width);
+  // The staged takeoff rotates on its own once it has flying speed.
+  if (state.autoPitch && p.onGround && p.speed > 18) controls.pitch = 1;
   if (pressed(input, 'm')) {
     setMuted(audio, !audio.muted);
   }
@@ -144,8 +153,25 @@ function step(dt) {
     resetGame();
     return;
   }
+  // C switches between the cockpit and the chase view; the view stays
+  // where the pilot left it across restarts.
+  if (pressed(input, 'c')) {
+    state.cockpit = !state.cockpit;
+  }
   const ev = stepPlane(p, controls, dt);
   state.stalled = ev.stalled;
+  // A touchdown on the strip is a landing, and a gentle one is worth
+  // more: landing well is a decision, not just a refuel stop.
+  if (ev.landed) {
+    const bonus = landingBonus(p);
+    m.score += bonus.points;
+    addMessage(
+      m,
+      bonus.smooth
+        ? `SMOOTH LANDING +${bonus.points} — refuel and repair`
+        : `TOUCHDOWN +${bonus.points} — refuel and repair`,
+    );
+  }
   // Scooping: skimming the lake fills the tank.
   state.overLake = overLake(p.x, p.z);
   if (state.overLake && !p.onGround && p.y < WORLD.waterLevel + 5 && p.speed > 14 && p.speed < 42) {
@@ -218,7 +244,7 @@ function step(dt) {
     const nearStrip =
       Math.hypot(p.x - WORLD.strip.x, p.z - WORLD.strip.z) < WORLD.strip.length;
     if (nearStrip && p.speed < 6) {
-      p.fuel = Math.min(100, p.fuel + 14 * dt);
+      p.fuel = Math.min(PLANE.fuelCapacity, p.fuel + 14 * dt);
       p.hull = Math.min(100, p.hull + 6 * dt);
     }
   }
@@ -254,6 +280,7 @@ function step(dt) {
     if (Math.random() < dt * 0.7) sfx.alarm(audio);
   }
   state.nearestFire = nearestFire(m, p.x, p.z);
+  state.phase = flightPhase(p, m);
   updateAudio(audio, p.throttle, p.speed, p.onGround);
 }
 
@@ -298,15 +325,20 @@ function frame(now) {
   // Camera.
   const p = state.plane;
   if (state.screen === 'title') {
-    const t = renderer.time * 0.04;
-    const cx = 420 + Math.sin(t) * 260;
-    const cz = -420 + Math.cos(t) * 260;
-    state.cam.x = cx;
-    state.cam.y = 90;
-    state.cam.z = cz;
-    state.cam.tx = -100;
-    state.cam.ty = 30;
-    state.cam.tz = 100;
+    if (state.cockpit) {
+      // The title over the cockpit on the strip: runway ahead, panel lit.
+      state.cam = cockpitCamera(p);
+    } else {
+      const t = renderer.time * 0.04;
+      const cx = 420 + Math.sin(t) * 260;
+      const cz = -420 + Math.cos(t) * 260;
+      state.cam.x = cx;
+      state.cam.y = 90;
+      state.cam.z = cz;
+      state.cam.tx = -100;
+      state.cam.ty = 30;
+      state.cam.tz = 100;
+    }
   } else if (state.anchor && shot.shot === 'drop') {
     // Three-quarter view for the drop shot: the camera sits off the
     // plane's right side and looks at the fire, so the falling water
@@ -329,6 +361,8 @@ function frame(now) {
   } else if (shot.shot && state.screen !== 'fly') {
     const c = cameraMatrixForShot(p, 'hero');
     state.cam = c;
+  } else if (state.cockpit) {
+    state.cam = cockpitCamera(p);
   } else {
     chaseCamera(p, dt, state.cam);
   }
@@ -354,3 +388,26 @@ function frame(now) {
 }
 
 requestAnimationFrame(frame);
+
+// Playtest handle: the headless autopilot reads the live state through
+// this (screen, plane, mission, phase, view) and drives real keys.
+window.__ember = {
+  get screen() {
+    return state.screen;
+  },
+  get plane() {
+    return state.plane;
+  },
+  get mission() {
+    return state.mission;
+  },
+  get phase() {
+    return state.phase;
+  },
+  get cockpit() {
+    return state.cockpit;
+  },
+  get time() {
+    return state.time;
+  },
+};

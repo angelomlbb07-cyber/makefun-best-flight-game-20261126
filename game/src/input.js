@@ -6,6 +6,8 @@
 export function newInput() {
   return {
     keys: new Set(),
+    hit: new Set(), // keys pressed since the last read: a fast tap is
+    // still one press even if keyup lands before the next step reads it
     mouseX: 0,
     mouseY: 0,
     mouseDown: false,
@@ -20,12 +22,16 @@ export function attachInput(input, canvas) {
       e.preventDefault();
     }
     input.keys.add(e.key.toLowerCase());
+    input.hit.add(e.key.toLowerCase());
     input.anyKey = true;
   });
   window.addEventListener('keyup', (e) => {
     input.keys.delete(e.key.toLowerCase());
   });
-  window.addEventListener('blur', () => input.keys.clear());
+  window.addEventListener('blur', () => {
+    input.keys.clear();
+    input.hit.clear();
+  });
   canvas.addEventListener('mousemove', (e) => {
     const r = canvas.getBoundingClientRect();
     input.mouseX = e.clientX - r.left;
@@ -72,9 +78,11 @@ export function readControls(input, width) {
 }
 
 // A one-shot key: true once per press (used for pause, mute, menus).
+// Reads the hit set, not the held set: a tap shorter than one step still
+// counts, and holding the key does not repeat it.
 export function pressed(input, key) {
-  if (input.keys.has(key)) {
-    input.keys.delete(key);
+  if (input.hit.has(key)) {
+    input.hit.delete(key);
     return true;
   }
   return false;

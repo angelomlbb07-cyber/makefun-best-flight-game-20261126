@@ -1,7 +1,8 @@
-// Deterministic screenshot staging: ?shot=start|play|drop|end&seed=N sets
-// the game to a fixed scene so the screenshots are repeatable and show the
-// game at its best — title over the valley, a run at a fire, a water drop,
-// and the win screen. The same file drives shots.json in the repository.
+// Deterministic screenshot staging: ?shot=start|takeoff|drop|land|end&seed=N
+// sets the game to a fixed scene so the screenshots are repeatable and show
+// the game at its best — the cockpit on the runway under the title, the
+// lift-off, a water drop, the final approach, and the win screen. The same
+// file drives shots.json in the repository.
 
 import { newPlane } from './plane.js';
 import { newMission } from './missions.js';
@@ -20,29 +21,46 @@ export function stageShot(shot) {
   const mission = newMission();
   const plane = newPlane();
   if (shot === 'start') {
-    // Parked on the strip at golden hour, fires smoking on the horizon.
+    // Parked on the strip at golden hour, fires smoking on the horizon —
+    // from the cockpit, so the title sits over the panel and the runway.
     plane.x = 420;
     plane.y = 14.6;
     plane.z = -420;
     plane.heading = 0.5;
     plane.throttle = 0;
-    return { screen: 'title', plane, mission };
+    return { screen: 'title', plane, mission, cockpit: true };
   }
-  if (shot === 'play') {
-    // Airborne, closing on the Lakeside front, ring ahead, tank full.
-    // The anchor holds the plane in place for the screenshot: the world
-    // animates around it (smoke, flames, clouds) while the fire stays
-    // in frame ahead of the nose.
-    const anchor = { x: -160, y: 82, z: 350, heading: 2.6 };
+  if (shot === 'takeoff') {
+    // On the strip, throttle full, about to rotate: the capture runs the
+    // sim for ~2 s, and autoPitch pulls the nose up once the wing has
+    // flying speed, so the frame catches the lift-off itself.
+    plane.x = 420;
+    plane.y = 14.6;
+    plane.z = -420;
+    plane.heading = 0.5;
+    plane.speed = 12;
+    plane.throttle = 1;
+    plane.tank = 0;
+    plane.fuel = 160;
+    return { screen: 'fly', plane, mission, cockpit: true, autoPitch: true };
+  }
+  if (shot === 'land') {
+    // On final approach to the strip, cockpit view, runway ahead: the
+    // anchor holds the plane on the glidepath so the strip stays in the
+    // windscreen for the photo, with the FINAL APPROACH banner lit.
+    const dirX = -Math.sin(0.5);
+    const dirZ = -Math.cos(0.5);
+    const anchor = { x: 420 - dirX * 480, y: 52, z: -420 - dirZ * 480, heading: 0.5 };
     plane.x = anchor.x;
     plane.y = anchor.y;
     plane.z = anchor.z;
-    plane.heading = anchor.heading; // toward the Lakeside front at (-220, 450)
-    plane.speed = 46;
-    plane.throttle = 0.62;
-    plane.tank = 100;
-    plane.fuel = 78;
-    return { screen: 'fly', plane, mission, anchor };
+    plane.heading = anchor.heading;
+    plane.speed = 34;
+    plane.throttle = 0.35;
+    plane.pitch = -0.06;
+    plane.tank = 40;
+    plane.fuel = 58;
+    return { screen: 'fly', plane, mission, cockpit: true, anchor };
   }
   if (shot === 'drop') {
     // Right over the Ridge front, water falling, tank half spent. The
@@ -58,7 +76,7 @@ export function stageShot(shot) {
     plane.throttle = 0.5;
     plane.tank = 55;
     plane.fuel = 64;
-    return { screen: 'fly', plane, mission, dropping: true, anchor };
+    return { screen: 'fly', plane, mission, dropping: true, anchor, cockpit: false };
   }
   if (shot === 'end') {
     // All fronts out: the win screen over a quiet valley.
@@ -80,7 +98,7 @@ export function stageShot(shot) {
     plane.throttle = 0.5;
     plane.tank = 20;
     plane.fuel = 48; // a third of a tank left after the sortie
-    return { screen: 'win', plane, mission };
+    return { screen: 'win', plane, mission, cockpit: false };
   }
   return null;
 }

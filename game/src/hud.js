@@ -114,6 +114,19 @@ export function drawHUD(ctx, w, h, s) {
   const p = s.plane;
   const m = s.mission;
   ctx.clearRect(0, 0, w, h);
+  // Cockpit panel band: in the cockpit view the 2D instruments sit on a
+  // panel, as they do in the 3D cockpit, so the gauges read as lit
+  // instruments rather than floating dials.
+  if (s.cockpit) {
+    ctx.fillStyle = 'rgba(10, 12, 16, 0.88)';
+    ctx.fillRect(0, h - 212, w, 212);
+    ctx.fillStyle = '#ff7a2e';
+    ctx.fillRect(0, h - 212, w, 3);
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('COCKPIT VIEW — press C for chase', w - 14, h - 192);
+  }
   // Top bar: score, fronts, time, objective.
   ctx.fillStyle = 'rgba(8, 12, 18, 0.66)';
   ctx.fillRect(0, 0, w, 44);
@@ -135,13 +148,24 @@ export function drawHUD(ctx, w, h, s) {
   ctx.font = 'bold 14px system-ui, sans-serif';
   ctx.fillStyle = '#ffe9a8';
   ctx.fillText(objectiveLine(m), 14, 62);
-  // Compass strip across the top centre.
+  // Flight phase banner: the takeoff and landing sequence, in words —
+  // roll, rotate, climb out, final, flare — so the sequence reads as
+  // one even before the pilot feels it.
+  if (s.phase && s.phase.label) {
+    ctx.fillStyle = '#ffd23e';
+    ctx.font = 'bold 18px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(s.phase.label, w / 2, 92);
+  }
+  // Compass strip across the top centre, below the phase banner: the
+  // objective line sits at y=62 and the banner at y=92, so the strip
+  // used to sit on top of the objective text.
   const deg = headingDeg(p.heading);
   const cw = 320;
   const cx = w / 2;
   ctx.save();
   ctx.fillStyle = 'rgba(8, 12, 18, 0.6)';
-  ctx.fillRect(cx - cw / 2, 52, cw, 26);
+  ctx.fillRect(cx - cw / 2, 110, cw, 26);
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 15px system-ui, sans-serif';
   ctx.textAlign = 'center';
@@ -150,13 +174,13 @@ export function drawHUD(ctx, w, h, s) {
     const off = (b - deg) * (cw / 130);
     if (Math.abs(off) > cw / 2 - 8) continue;
     const bb = ((b % 360) + 360) % 360;
-    ctx.fillText(bb % 45 === 0 ? compassLabel(bb) : String(bb), cx + off, 65);
+    ctx.fillText(bb % 45 === 0 ? compassLabel(bb) : String(bb), cx + off, 123);
   }
   ctx.fillStyle = '#ffd23e';
   ctx.beginPath();
-  ctx.moveTo(cx, 52);
-  ctx.lineTo(cx - 6, 44);
-  ctx.lineTo(cx + 6, 44);
+  ctx.moveTo(cx, 110);
+  ctx.lineTo(cx - 6, 102);
+  ctx.lineTo(cx + 6, 102);
   ctx.closePath();
   ctx.fill();
   ctx.restore();
@@ -267,7 +291,7 @@ export function drawTitle(ctx, w, h) {
       'Scoop water from the lake. Drop it on the fire. Save the town.',
       '',
       'Arrows / WASD — fly      Shift — throttle up      Ctrl — throttle down',
-      'Space — drop water      R — restart      P — pause      M — mute',
+      'Space — drop water      C — cockpit / chase view      R — restart      P — pause      M — mute',
       'Land on the strip to refuel and repair. Low and slow over the lake scoops.',
     ],
     'Press ENTER or click to fly',

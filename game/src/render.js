@@ -94,10 +94,13 @@ export function renderScene(r, program, state, cam) {
   gl.enable(gl.DEPTH_TEST);
   gl.useProgram(program.prog);
   const proj = matPerspective((62 * Math.PI) / 180, w / h, 0.5, 4200);
+  // The cockpit camera carries its own up vector (rolled with the wings);
+  // the chase camera stays level.
+  const up = cam.ux === undefined ? [0, 1, 0] : [cam.ux, cam.uy, cam.uz];
   const view = matLookAt(
     [cam.x, cam.y, cam.z],
     [cam.tx, cam.ty, cam.tz],
-    [0, 1, 0],
+    up,
   );
   gl.uniformMatrix4fv(loc.uProj, false, proj);
   gl.uniformMatrix4fv(loc.uView, false, view);
@@ -239,10 +242,19 @@ export function renderScene(r, program, state, cam) {
       gl.disable(gl.BLEND);
     }
   }
-  // The aircraft and its spinning prop.
+  // The aircraft: from the cockpit you see its interior and its nose,
+  // not its outside. The prop blades are NOT drawn in cockpit view:
+  // two solid dark blades spinning right ahead of the windscreen read
+  // as a black pillar across the pilot's view in a still frame. The
+  // spinner is part of the cockpit mesh, so the nose still reads.
+  // From the chase view you see the whole plane, prop included.
   const pm = planeMatrix(state.plane);
-  state.planeMesh.draw(program, pm);
-  state.propMesh.draw(program, propMatrix(state.plane));
+  if (state.cockpit && state.cockpitMesh) {
+    state.cockpitMesh.draw(program, pm);
+  } else {
+    state.planeMesh.draw(program, pm);
+    state.propMesh.draw(program, propMatrix(state.plane));
+  }
   // Clouds: rounded puffs drifting high up, bright (emissive) so they
   // read white against the sky instead of grey cards.
   {

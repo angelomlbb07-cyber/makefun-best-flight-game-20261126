@@ -35,6 +35,12 @@ function pushMessage(m, text) {
   if (m.messages.length > 3) m.messages.shift();
 }
 
+// A message from outside the mission step (a landing bonus, a phase
+// call): the same toast the mission's own messages use.
+export function addMessage(m, text) {
+  pushMessage(m, text);
+}
+
 // One fixed step. plane: the aircraft (for drop/scoop checks done by the
 // caller); drops: [{x, z, amount}] water impacts this step; dt seconds.
 export function stepMission(m, drops, dt, town, station) {
